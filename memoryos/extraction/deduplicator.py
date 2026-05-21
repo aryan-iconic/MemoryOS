@@ -1,6 +1,8 @@
 "Deduplication logic for extracted facts."
-from typing import List, Dict, Any
-from .models import Fact
+from typing import List, Dict, Any, Optional
+from difflib import SequenceMatcher
+from ..models import Fact
+
 class Deduplicator:
     def __init__(self, similarity_threshold: float = 0.90):
         self.similarity_threshold = similarity_threshold

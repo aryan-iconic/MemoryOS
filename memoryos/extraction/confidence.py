@@ -35,4 +35,5 @@ class ConfidenceScorer:
         return self._clamp(score)
 
     def _clamp(self, score: float) -> float:
-        return max(0.0, min(1.0, score))
+        score = max(0.0, min(1.0, score))
+        return round(score, 4)

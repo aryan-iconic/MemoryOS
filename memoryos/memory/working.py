@@ -1,4 +1,4 @@
-from models import Turn, MemorySearchResult, MemoryOSConfig
+from memoryos.models import Turn, MemorySearchResult, MemoryOSConfig
 from typing import List, Dict, Any, Optional
 from collections import deque
 

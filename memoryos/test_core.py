@@ -37,16 +37,16 @@ for fact in memory.get_all_facts():
     print("-", fact.content, "| embedding:", fact.embedding is not None)
 
 print("\nSearch: what UI does the user like?")
-results = memory.search_memory("What UI theme does the user prefer?", limit=3)
+results = memory.search_memory("What UI theme does the user prefer?", top_k=3)
 
-for fact, score in results:
-    print(round(score, 4), "-", fact.content)
+for result in results:
+    print(round(result.score, 4), "-", result.content)
 
 print("\nSearch: what is the user building?")
-results = memory.search_memory("What project is the user building?", limit=3)
+results = memory.search_memory("What project is the user building?", top_k=3)
 
-for fact, score in results:
-    print(round(score, 4), "-", fact.content)
+for result in results:
+    print(round(result.score, 4), "-", result.content)
 
 print("\nGenerated LLM context:")
 context = memory.build_context(

@@ -1,9 +1,9 @@
 
-from typing import List, Dict, Any
-from .models import Fact, Turn
-from .patterns import DEFAULT_PATTERNS, ExtractionPattern, compile_pattern
-from .deduplicator import Deduplicator
-from .confidence import ConfidenceScorer
+from typing import List, Dict, Any, Optional
+from memoryos.models import Fact, Turn
+from memoryos.extraction.patterns import DEFAULT_PATTERNS, ExtractionPattern, compile_pattern
+from memoryos.extraction.deduplicator import Deduplicator
+from memoryos.extraction.confidence import ConfidenceScorer
 
 class Extractor:
 
