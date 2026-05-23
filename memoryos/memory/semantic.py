@@ -42,7 +42,7 @@ class SemanticMemory:
     def search(
         self,
         query: str,
-        limit: int = 5,
+        top_k: int = 5,
         fact_type: Optional[str] = None,
         session_id: Optional[str] = None,
         min_score: Optional[float] = None,

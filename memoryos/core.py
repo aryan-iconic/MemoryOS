@@ -6,7 +6,7 @@ from .extraction.extractor import Extractor
 from .memory.semantic import SemanticMemory
 from .models import Fact, MemorySearchResult, Turn
 from .storage.sqlite_store import SQLiteStore
-
+from .memory.working import WorkingMemory
 
 class MemoryOS:
     def __init__(
@@ -18,6 +18,7 @@ class MemoryOS:
         self.session_id = session_id
         self.store = SQLiteStore(db_path)
         self.extractor = Extractor()
+        self.working_memory = WorkingMemory()
 
         self.semantic_memory = SemanticMemory(
             store=self.store,
@@ -42,6 +43,8 @@ class MemoryOS:
         self.store.save_turn(turn)
 
         extracted_facts = self.extractor.extract(turn)
+        self.working_memory.add_turn(turn)
+        self.store.save_turn(turn)
         existing_facts = self.store.get_facts_by_session(active_session_id)
 
         new_facts = self._filter_new_facts(
@@ -71,7 +74,7 @@ class MemoryOS:
 
         return self.semantic_memory.search(
             query=query,
-            limit=top_k,
+            top_k=top_k,
             fact_type=fact_type,
             session_id=active_session_id,
             min_score=min_score,
@@ -115,7 +118,40 @@ class MemoryOS:
             context = context[:max_chars].rstrip() + "..."
 
         return context
+    def build_prompt_context(
+        self,
+        query: str,
+        memory_limit: int = 5,
+        turn_limit: int = 6,
+        max_chars: int = 3000,
+    ) -> str:
+        memory_context = self.build_context(
+            query=query,
+            limit=memory_limit,
+            max_chars=max_chars // 2,
+            min_score=0.20,
+        )
 
+        working_context = self.working_memory.build_context(
+            limit=turn_limit,
+            max_chars=max_chars // 2,
+        )
+
+        parts = []
+
+        if memory_context:
+            parts.append(memory_context)
+
+        if working_context:
+            parts.append(working_context)
+
+        final_context = "\n\n".join(parts)
+
+        if len(final_context) > max_chars:
+            final_context = final_context[:max_chars].rstrip() + "..."
+
+        return final_context
+        
     def get_all_facts(
         self,
         limit: Optional[int] = None,

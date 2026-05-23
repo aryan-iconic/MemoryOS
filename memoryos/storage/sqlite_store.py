@@ -42,7 +42,8 @@ class SQLiteStore:
                     timestamp REAL NOT NULL,
                     access_count INTEGER DEFAULT 0,
                     embedding TEXT,
-                    metadata TEXT
+                    metadata TEXT,
+                    created_at REAL NOT NULL
                 )
                 """
             )
@@ -80,7 +81,12 @@ class SQLiteStore:
                 ON turns(session_id)
                 """
             )
-
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_episodes_session
+                ON episodes(session_id)
+                """
+            )
             conn.commit()
 
     def save_fact(self, fact: Union[Fact, Dict[str, Any]]) -> None:
@@ -289,14 +295,108 @@ class SQLiteStore:
         turns = [self._row_to_turn(row) for row in rows]
 
         return list(reversed(turns))
+    def save_episode(self, episode: Dict[str, Any]) -> None:
+        with self._connect() as conn:
+            cursor = conn.cursor()
 
+            cursor.execute(
+            """
+            INSERT OR REPLACE INTO episodes (
+                id,
+                session_id,
+                summary,
+                start_timestamp,
+                end_timestamp,
+                turn_count,
+                embedding,
+                metadata,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                episode["id"],
+                episode["session_id"],
+                episode["summary"],
+                episode["start_timestamp"],
+                episode["end_timestamp"],
+                episode["turn_count"],
+                self._serialize_embedding(episode.get("embedding")),
+                json.dumps(episode.get("metadata", {}), ensure_ascii=False),
+                episode.get("created_at", time.time()),
+            ),
+        )
+
+        conn.commit()
+
+    def get_episodes_by_session(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        query = """
+            SELECT *
+            FROM episodes
+            WHERE session_id = ?
+            ORDER BY created_at DESC
+        """
+
+        params: List[Any] = [session_id]
+
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+        episodes = []
+        for row in rows:
+            metadata = self._safe_json_loads(row["metadata"], default={})
+            embedding = self._deserialize_embedding(row["embedding"])
+
+            episodes.append({
+                "id": row["id"],
+                "session_id": row["session_id"],
+                "summary": row["summary"],
+                "start_timestamp": row["start_timestamp"],
+                "end_timestamp": row["end_timestamp"],
+                "turn_count": row["turn_count"],
+                "embedding": embedding,
+                "metadata": metadata,
+                "created_at": row["created_at"],
+            })
+
+        return episodes
+
+    def get_all_episodes(
+        self,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        query = """
+            SELECT *
+            FROM episodes
+            ORDER BY end_timestamp DESC
+        """
+
+        params: List[Any] = []
+
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+        return [self._row_to_episode(row) for row in rows]
+               
     def clear_session(self, session_id: str) -> None:
         with self._connect() as conn:
             cursor = conn.cursor()
 
             cursor.execute("DELETE FROM facts WHERE session_id = ?", (session_id,))
             cursor.execute("DELETE FROM turns WHERE session_id = ?", (session_id,))
-
+            cursor.execute("DELETE FROM episodes WHERE session_id = ?", (session_id,))
             conn.commit()
 
     def clear_all(self) -> None:
@@ -305,7 +405,7 @@ class SQLiteStore:
 
             cursor.execute("DELETE FROM facts")
             cursor.execute("DELETE FROM turns")
-
+            cursor.execute("DELETE FROM episodes")
             conn.commit()
 
     def _row_to_fact(self, row: sqlite3.Row) -> Fact:
