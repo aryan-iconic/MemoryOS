@@ -1,36 +1,34 @@
-"""Database migrations for storage."""
-from .sqlite_store import SQLiteStore
+"""Database migration helpers for MemoryOS storage."""
 
-def migrate_database(old_db_path: str, new_db_path: str) -> None:
+from __future__ import annotations
+
+from memoryos.storage.sqlite_store import SQLiteStore
+
+
+def migrate_database(old_db_path: str, new_db_path: str) -> dict[str, int]:
+    """Copy facts, turns, and episodes between two SQLite MemoryOS databases."""
     old_store = SQLiteStore(old_db_path)
     new_store = SQLiteStore(new_db_path)
-    old_store.connect()
-    new_store.connect()
-    old_store.create_tables()
-    new_store.create_tables()
-    # Migrate facts
-    old_facts = old_store.get_all_facts()
-    for fact in old_facts:
-        new_store.add_fact(
-            content=fact.content,
-            type=fact.type,
-            confidence=fact.confidence,
-            session_id=fact.session_id,
-            source=fact.source,
-            timestamp=fact.timestamp,
-            access_count=fact.access_count,
-            embedding=fact.embedding,
-            metadata=fact.metadata,
-        )
-    # Migrate turns
-    old_turns = old_store.get_all_turns()
-    for turn in old_turns:
-        new_store.add_turn(
-            user_message=turn.user_message,
-            ai_response=turn.ai_response,
-            session_id=turn.session_id,
-            timestamp=turn.timestamp,
-            metadata=turn.metadata,
-        )
-    old_store.close()
-    new_store.close()
+    counts = {"facts": 0, "turns": 0, "episodes": 0}
+    try:
+        for fact in old_store.get_all_facts():
+            new_store.save_fact(fact)
+            counts["facts"] += 1
+
+        session_ids = {fact.session_id for fact in old_store.get_all_facts()}
+        for episode in old_store.get_all_episodes():
+            session_ids.add(str(episode.get("session_id", "")))
+            new_store.save_episode(dict(episode))
+            counts["episodes"] += 1
+
+        for session_id in sorted(session for session in session_ids if session):
+            for turn in old_store.get_turns_by_session(session_id):
+                new_store.save_turn(dict(turn))
+                counts["turns"] += 1
+    finally:
+        old_store.close()
+        new_store.close()
+    return counts
+
+
+__all__ = ["migrate_database"]

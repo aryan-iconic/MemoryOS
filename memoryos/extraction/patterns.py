@@ -17,12 +17,12 @@ class ExtractionPattern:
 
 DEFAULT_PATTERNS: List[ExtractionPattern] = [
     ExtractionPattern(
-    pattern_id="identity_name",
-    description="Extract user's name",
-    fact_type="identity",
-    regex=r"\bmy name is\s+(?P<value>[A-Za-z][A-Za-z\s'-]{1,50}?)(?=\s*(?:[.!?,;]|$|\band\b|\bbut\b))",
-    template="User's name is {value}.",
-    base_confidence=0.95,   
+        pattern_id="identity_name",
+        description="Extract user's name",
+        fact_type="identity",
+        regex=r"\bmy name is\s+(?P<value>[A-Za-z][A-Za-z\s'-]{1,50}?)(?=\s*(?:[.!?,;]|$|\band\b|\bbut\b))",
+        template="User's name is {value}.",
+        base_confidence=0.95,
     ),
     ExtractionPattern(
         pattern_id="preference_prefer",

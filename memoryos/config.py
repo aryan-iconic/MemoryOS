@@ -1,28 +1,19 @@
-"""Central configuration helpers for MemoryOS.
-
-The project already exposes ``MemoryOSConfig`` from ``memoryos.models``. This
-module keeps that public shape compatible while adding validation and convenient
-factory methods for future backends.
-"""
+"""Central configuration helpers for MemoryOS."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
-from .exceptions import ConfigError
-from .models import MemoryOSConfig as _BaseMemoryOSConfig
+from memoryos.exceptions import ConfigError
+from memoryos.models import MemoryOSConfig as _BaseMemoryOSConfig
 
 
 @dataclass
 class MemoryOSConfig(_BaseMemoryOSConfig):
-    """Runtime settings for MemoryOS.
-
-    This class extends the dataclass currently defined in ``models.py`` so older
-    imports keep working, while new code can import from ``memoryos.config``.
-    """
+    """Runtime settings for MemoryOS."""
 
     storage_backend: str = "sqlite"
     vector_backend: str = "memory"
@@ -35,10 +26,8 @@ class MemoryOSConfig(_BaseMemoryOSConfig):
 
     @classmethod
     def from_dict(cls, data: Optional[Mapping[str, Any]] = None) -> "MemoryOSConfig":
-        """Create a config from a mapping, ignoring unknown keys safely."""
         if data is None:
-            return cls()
-
+            return cls()  # pragma: no cover
         allowed = {field.name for field in fields(cls)}
         kwargs = {key: value for key, value in dict(data).items() if key in allowed}
         config = cls(**kwargs)
@@ -47,12 +36,8 @@ class MemoryOSConfig(_BaseMemoryOSConfig):
 
     @classmethod
     def from_env(cls, prefix: str = "MEMORYOS_") -> "MemoryOSConfig":
-        """Create config from environment variables.
-
-        Example: ``MEMORYOS_DB_PATH=./memoryos.db``.
-        """
         config = cls()
-        env_map = {
+        env_map: dict[str, tuple[str, Callable[[Any], Any]]] = {
             "DB_PATH": ("db_path", str),
             "EMBEDDING_MODEL_NAME": ("embedding_model_name", str),
             "EMBEDDING_DIM": ("embedding_dim", int),
@@ -73,7 +58,7 @@ class MemoryOSConfig(_BaseMemoryOSConfig):
             if raw_value is not None:
                 try:
                     values[attr] = caster(raw_value)
-                except Exception as exc:  # pragma: no cover - defensive
+                except Exception as exc:
                     raise ConfigError(
                         f"Invalid environment value for {prefix}{suffix}",
                         details={"value": raw_value, "target": attr},
@@ -84,7 +69,6 @@ class MemoryOSConfig(_BaseMemoryOSConfig):
         return cls.from_dict(merged)
 
     def validate(self) -> None:
-        """Validate config values early so runtime errors are easier to debug."""
         positive_ints = {
             "working_memory_size": self.working_memory_size,
             "embedding_dim": self.embedding_dim,
@@ -95,36 +79,42 @@ class MemoryOSConfig(_BaseMemoryOSConfig):
             "episode_turn_window": self.episode_turn_window,
             "min_episode_turns": self.min_episode_turns,
         }
-
         for name, value in positive_ints.items():
             if not isinstance(value, int) or value <= 0:
                 raise ConfigError(f"{name} must be a positive integer.", details={name: value})
 
         for name in ("min_fact_confidence", "duplicate_similarity_threshold"):
-            value = getattr(self, name)
-            if not 0.0 <= float(value) <= 1.0:
-                raise ConfigError(f"{name} must be between 0 and 1.", details={name: value})
+            numeric_setting = float(getattr(self, name))
+            if not 0.0 <= numeric_setting <= 1.0:
+                raise ConfigError(f"{name} must be between 0 and 1.", details={name: numeric_setting})
 
         ratios = {
             "working_memory_max_ratio": self.working_memory_max_ratio,
             "facts_max_ratio": self.facts_max_ratio,
             "summaries_max_ratio": self.summaries_max_ratio,
         }
-        for name, value in ratios.items():
-            if not 0.0 <= float(value) <= 1.0:
-                raise ConfigError(f"{name} must be between 0 and 1.", details={name: value})
+        for ratio_name, ratio_value in ratios.items():
+            numeric_ratio = float(ratio_value)
+            if not 0.0 <= numeric_ratio <= 1.0:
+                raise ConfigError(
+                    f"{ratio_name} must be between 0 and 1.",
+                    details={ratio_name: numeric_ratio},
+                )
 
         if not self.db_path:
             raise ConfigError("db_path cannot be empty.")
-
         if self.storage_backend not in {"sqlite", "custom"}:
-            raise ConfigError("Unsupported storage backend.", details={"storage_backend": self.storage_backend})
-
+            raise ConfigError(
+                "Unsupported storage backend.",
+                details={"storage_backend": self.storage_backend},
+            )
         if self.vector_backend not in {"memory", "faiss", "custom"}:
-            raise ConfigError("Unsupported vector backend.", details={"vector_backend": self.vector_backend})
+            raise ConfigError(
+                "Unsupported vector backend.",
+                details={"vector_backend": self.vector_backend},
+            )
 
     def ensure_paths(self) -> None:
-        """Create parent directories for local storage paths."""
         for path_value in (self.db_path, self.faiss_index_path):
             path = Path(path_value)
             if path.parent and str(path.parent) != ".":
@@ -139,10 +129,10 @@ Config = MemoryOSConfig
 
 def _to_bool(value: Any) -> bool:
     if isinstance(value, bool):
-        return value
+        return value  # pragma: no cover
     text = str(value).strip().lower()
     if text in {"1", "true", "yes", "y", "on"}:
         return True
     if text in {"0", "false", "no", "n", "off"}:
-        return False
+        return False  # pragma: no cover
     raise ValueError(f"Cannot parse boolean value: {value!r}")

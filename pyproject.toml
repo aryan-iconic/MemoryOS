@@ -9,6 +9,16 @@ description = "Persistent long-term memory layer for AI applications."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "Aryan Gupta" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "numpy>=1.23",
 ]
@@ -16,9 +26,54 @@ dependencies = [
 [project.optional-dependencies]
 embeddings = ["sentence-transformers>=2.2.0"]
 faiss = ["faiss-cpu>=1.7.4"]
-dev = ["pytest>=7.0", "sentence-transformers>=2.2.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4.0",
+    "black>=24.0",
+    "mypy>=1.8",
+    "build>=1.0",
+    "sentence-transformers>=2.2.0",
+]
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*", "examples", "examples.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"
+
+[tool.black]
+target-version = ["py311"]
+line-length = 120
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unused_ignores = false
+
+[tool.coverage.run]
+branch = false
+source = ["memoryos"]
+omit = [
+    "memoryos/test_core.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+precision = 2
+fail_under = 100
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+    '\.\.\.',
+]

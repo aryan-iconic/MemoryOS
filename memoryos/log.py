@@ -1,4 +1,5 @@
 """Logging configuration for memoryos."""
+
 from logging import getLogger, StreamHandler, Formatter, DEBUG
 
 logger = getLogger("memoryos")

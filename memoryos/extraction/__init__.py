@@ -3,7 +3,11 @@
 from memoryos.extraction.confidence import ConfidenceScorer
 from memoryos.extraction.deduplicator import Deduplicator
 from memoryos.extraction.extractor import Extractor
-from memoryos.extraction.patterns import DEFAULT_PATTERNS, ExtractionPattern, compile_pattern
+from memoryos.extraction.patterns import (
+    DEFAULT_PATTERNS,
+    ExtractionPattern,
+    compile_pattern,
+)
 from memoryos.models import Fact, Turn
 
 __all__ = [

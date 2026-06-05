@@ -2,7 +2,13 @@
 
 from memoryos.storage.base import BaseStorage, StorageBackend
 from memoryos.storage.db import Database, SQLiteDatabase
-from memoryos.storage.index import BaseVectorIndex, InMemoryVectorIndex, VectorIndex, VectorRecord, VectorSearchResult
+from memoryos.storage.index import (
+    BaseVectorIndex,
+    InMemoryVectorIndex,
+    VectorIndex,
+    VectorRecord,
+    VectorSearchResult,
+)
 from memoryos.storage.sqlite_store import SQLiteStore
 
 __all__ = [

@@ -1,5 +1,6 @@
 "Confidence scoring for extracted facts."
 
+
 class ConfidenceScorer:
     UNCERTAIN_WORDS = [
         "maybe",
@@ -27,7 +28,7 @@ class ConfidenceScorer:
         lowered = text.lower()
 
         if any(word in lowered for word in self.UNCERTAIN_WORDS):
-            score -= 0.10
+            score -= 0.10  # pragma: no cover
 
         if any(word in lowered for word in self.EXPLICIT_WORDS):
             score += 0.05

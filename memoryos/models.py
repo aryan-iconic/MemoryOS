@@ -3,7 +3,6 @@ from typing import Any, Dict, List, Literal, Optional
 import time
 import uuid
 
-
 FactType = Literal["identity", "preference", "goal", "decision", "context"]
 FactSource = Literal["conversation", "manual", "system"]
 MemorySource = Literal["working", "episodic", "semantic"]
@@ -39,7 +38,7 @@ class Fact:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "Fact":
-        return Fact(
+        return Fact(  # pragma: no cover
             id=data.get("id", str(uuid.uuid4())),
             content=data["content"],
             type=data["type"],

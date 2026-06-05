@@ -1,0 +1,16 @@
+numpy>=1.23
+
+[dev]
+pytest>=7.0
+pytest-cov>=4.0
+ruff>=0.4.0
+black>=24.0
+mypy>=1.8
+build>=1.0
+sentence-transformers>=2.2.0
+
+[embeddings]
+sentence-transformers>=2.2.0
+
+[faiss]
+faiss-cpu>=1.7.4

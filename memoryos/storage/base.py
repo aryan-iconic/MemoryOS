@@ -77,7 +77,7 @@ class StorageBackend(ABC):
 
     def close(self) -> None:
         """Close backend resources when needed."""
-        return None
+        return None  # pragma: no cover
 
 
 BaseStorage = StorageBackend

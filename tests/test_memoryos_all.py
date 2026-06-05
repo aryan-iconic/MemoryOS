@@ -6,7 +6,7 @@ from pathlib import Path
 
 from memoryos import MemoryOS, MemoryOSConfig
 from memoryos.extraction import ConfidenceScorer, Deduplicator, Extractor
-from memoryos.models import Fact, MemorySearchResult, Turn
+from memoryos.models import MemorySearchResult, Turn
 from memoryos.retrieval.builder import PromptContextBuilder
 from memoryos.retrieval.ranker import MemoryRanker
 from memoryos.storage.index import InMemoryVectorIndex
