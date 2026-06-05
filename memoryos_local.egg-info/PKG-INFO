@@ -1,3 +1,32 @@
+Metadata-Version: 2.4
+Name: memoryos-local
+Version: 0.1.0
+Summary: Persistent long-term memory layer for AI applications.
+Author: Aryan Gupta
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.23
+Provides-Extra: embeddings
+Requires-Dist: sentence-transformers>=2.2.0; extra == "embeddings"
+Provides-Extra: faiss
+Requires-Dist: faiss-cpu>=1.7.4; extra == "faiss"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: ruff>=0.4.0; extra == "dev"
+Requires-Dist: black>=24.0; extra == "dev"
+Requires-Dist: mypy>=1.8; extra == "dev"
+Requires-Dist: build>=1.0; extra == "dev"
+Requires-Dist: sentence-transformers>=2.2.0; extra == "dev"
+
 <div align="center">
 
 # MemoryOS
@@ -48,19 +77,19 @@ context = memory.build_context("What does this user prefer?")
 ## Installation
 
 ```bash
-pip install memoryos-local
+pip install memoryos
 ```
 
 With semantic embeddings (recommended for production):
 
 ```bash
-pip install "memoryos-local[embeddings]"
+pip install "memoryos[embeddings]"
 ```
 
 With FAISS vector index (for large memory stores):
 
 ```bash
-pip install "memoryos-local[embeddings,faiss]"
+pip install "memoryos[embeddings,faiss]"
 ```
 
 **Requirements:** Python 3.9+, numpy (auto-installed)

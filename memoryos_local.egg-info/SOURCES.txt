@@ -8,11 +8,6 @@ memoryos/exceptions.py
 memoryos/log.py
 memoryos/models.py
 memoryos/test_core.py
-memoryos.egg-info/PKG-INFO
-memoryos.egg-info/SOURCES.txt
-memoryos.egg-info/dependency_links.txt
-memoryos.egg-info/requires.txt
-memoryos.egg-info/top_level.txt
 memoryos/compression/__init__.py
 memoryos/compression/compressor.py
 memoryos/compression/summarizer.py
@@ -52,6 +47,11 @@ memoryos/utils/ids.py
 memoryos/utils/text.py
 memoryos/utils/time.py
 memoryos/utils/tokens.py
+memoryos_local.egg-info/PKG-INFO
+memoryos_local.egg-info/SOURCES.txt
+memoryos_local.egg-info/dependency_links.txt
+memoryos_local.egg-info/requires.txt
+memoryos_local.egg-info/top_level.txt
 tests/test_confidence.py
 tests/test_context_builder.py
 tests/test_core.py
