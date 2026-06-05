@@ -1,65 +1,145 @@
+"""Public MemoryOS API.
+
+This module intentionally stays thin. The heavy work is delegated to
+``memoryos.memory.manager.MemoryManager`` so storage, retrieval, extraction,
+compression, and ranking remain replaceable.
+"""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-from .extraction.extractor import Extractor
-from .memory.semantic import SemanticMemory
-from .models import Fact, MemorySearchResult, Turn
-from .storage.sqlite_store import SQLiteStore
-from .memory.working import WorkingMemory
+from memoryos.config import MemoryOSConfig
+from memoryos.exceptions import ConfigError, MemoryOSError, ValidationError
+from memoryos.memory.manager import MemoryManager
+from memoryos.models import Fact, MemorySearchResult, Turn
+
 
 class MemoryOS:
+    """Main user-facing class for MemoryOS.
+
+    Basic usage::
+
+        from memoryos import MemoryOS
+
+        memory = MemoryOS(db_path="memoryos.db", session_id="default")
+        memory.process_turn("My name is Aryan. I prefer dark UI.")
+        context = memory.build_context("What UI does the user prefer?")
+
+    The constructor accepts either a full ``MemoryOSConfig`` object or quick
+    keyword overrides such as ``db_path`` and ``session_id``.
+    """
+
     def __init__(
         self,
-        db_path: str = "memoryos.db",
+        db_path: Optional[str] = None,
         session_id: str = "default_session",
-        similarity_threshold: float = 0.35,
+        config: Optional[Union[MemoryOSConfig, Dict[str, Any]]] = None,
+        store: Optional[Any] = None,
+        extractor: Optional[Any] = None,
+        working_memory: Optional[Any] = None,
+        semantic_memory: Optional[Any] = None,
+        episodic_memory: Optional[Any] = None,
+        retriever: Optional[Any] = None,
+        context_builder: Optional[Any] = None,
+        **config_overrides: Any,
     ):
-        self.session_id = session_id
-        self.store = SQLiteStore(db_path)
-        self.extractor = Extractor()
-        self.working_memory = WorkingMemory()
-
-        self.semantic_memory = SemanticMemory(
-            store=self.store,
-            similarity_threshold=similarity_threshold,
+        self.config = self._build_config(
+            config=config,
+            db_path=db_path,
+            overrides=config_overrides,
         )
+        self.session_id = session_id
+        self.manager = MemoryManager(
+            config=self.config,
+            store=store,
+            extractor=extractor,
+            working_memory=working_memory,
+            semantic_memory=semantic_memory,
+            episodic_memory=episodic_memory,
+            retriever=retriever,
+            context_builder=context_builder,
+            session_id=session_id,
+        )
+
+        # Compatibility aliases for older code that accessed internals directly.
+        self.store = self.manager.store
+        self.extractor = self.manager.extractor
+        self.working_memory = self.manager.working_memory
+        self.semantic_memory = self.manager.semantic_memory
+        self.episodic_memory = self.manager.episodic_memory
+        self.retriever = self.manager.retriever
+        self.context_builder = self.manager.context_builder
+
+    @classmethod
+    def from_config(
+        cls,
+        config: Union[MemoryOSConfig, Dict[str, Any]],
+        *,
+        session_id: str = "default_session",
+        **kwargs: Any,
+    ) -> "MemoryOS":
+        """Create MemoryOS from a config object or config dictionary."""
+        return cls(config=config, session_id=session_id, **kwargs)
+
+    @classmethod
+    def from_env(
+        cls,
+        *,
+        prefix: str = "MEMORYOS_",
+        session_id: str = "default_session",
+        **kwargs: Any,
+    ) -> "MemoryOS":
+        """Create MemoryOS from environment variables.
+
+        Example: ``MEMORYOS_DB_PATH=./data/memoryos.db``.
+        """
+        return cls(config=MemoryOSConfig.from_env(prefix=prefix), session_id=session_id, **kwargs)
 
     def process_turn(
         self,
         user_message: str,
         ai_response: str = "",
         session_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        create_episode: Optional[bool] = None,
     ) -> Dict[str, Any]:
-
-        active_session_id = session_id or self.session_id
-
-        turn = Turn(
-            session_id=active_session_id,
+        """Save one conversation turn and extract/store new durable facts."""
+        user_message = self._validate_text(user_message, field_name="user_message")
+        ai_response = "" if ai_response is None else str(ai_response)
+        return self.manager.process_turn(
             user_message=user_message,
             ai_response=ai_response,
+            session_id=session_id,
+            metadata=metadata,
+            create_episode=create_episode,
         )
 
-        self.store.save_turn(turn)
+    def add_memory(
+        self,
+        content: str,
+        *,
+        fact_type: str = "context",
+        confidence: float = 0.95,
+        session_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Fact:
+        """Manually add a long-term fact without running extraction."""
+        content = self._validate_text(content, field_name="content")
+        if not 0.0 <= float(confidence) <= 1.0:
+            raise ValidationError("confidence must be between 0 and 1.", details={"confidence": confidence})
 
-        extracted_facts = self.extractor.extract(turn)
-        self.working_memory.add_turn(turn)
-        self.store.save_turn(turn)
-        existing_facts = self.store.get_facts_by_session(active_session_id)
-
-        new_facts = self._filter_new_facts(
-            extracted_facts=extracted_facts,
-            existing_facts=existing_facts,
+        fact = Fact(
+            content=content,
+            type=fact_type,  # type: ignore[arg-type]
+            confidence=float(confidence),
+            session_id=session_id or self.session_id,
+            source="manual",
+            metadata=metadata or {},
         )
-
-        saved_facts = self.semantic_memory.add_facts(new_facts)
-
-        return {
-            "turn": turn,
-            "extracted_facts": extracted_facts,
-            "new_facts": new_facts,
-            "saved_facts": saved_facts,
-        }
+        saved = self.semantic_memory.add_fact(fact)
+        return saved or fact
 
     def search_memory(
         self,
@@ -67,57 +147,46 @@ class MemoryOS:
         top_k: int = 5,
         fact_type: Optional[str] = None,
         session_id: Optional[str] = None,
-        min_score: Optional[float] = None,
+        min_score: Optional[float] = 0.0,
+        include_working: bool = True,
+        include_semantic: bool = True,
+        include_episodic: bool = True,
     ) -> List[MemorySearchResult]:
-
-        active_session_id = session_id or self.session_id
-
-        return self.semantic_memory.search(
-            query=query,
+        """Search all enabled memory layers and return ranked results."""
+        query = self._validate_text(query, field_name="query")
+        return self.manager.search(
+            query,
+            session_id=session_id,
             top_k=top_k,
             fact_type=fact_type,
-            session_id=active_session_id,
             min_score=min_score,
+            include_working=include_working,
+            include_semantic=include_semantic,
+            include_episodic=include_episodic,
         )
+
+    # Short alias used by some integrations.
+    search = search_memory
 
     def build_context(
         self,
         query: str,
-        limit: int = 5,
+        limit: Optional[int] = None,
         session_id: Optional[str] = None,
-        max_chars: int = 1500,
-        min_score: Optional[float] = 0.20,
+        max_chars: Optional[int] = None,
+        include_recent_turns: bool = True,
+        **_: Any,
     ) -> str:
-
-        results = self.search_memory(
-            query=query,
-            top_k=limit,
+        """Build the final compact context block for an LLM prompt."""
+        query = self._validate_text(query, field_name="query")
+        return self.manager.build_context(
+            query,
             session_id=session_id,
-            min_score=min_score,
+            top_k=limit,
+            max_chars=max_chars,
+            include_recent_turns=include_recent_turns,
         )
 
-        if not results:
-            return ""
-
-        lines = ["Relevant user memory:"]
-
-        for result in results:
-            metadata = result.metadata or {}
-
-            fact_type = metadata.get("fact_type", "unknown")
-            confidence = metadata.get("original_confidence", 0.0)
-
-            lines.append(
-                f"- {result.content} "
-                f"(type={fact_type}, confidence={confidence:.2f}, score={result.score:.3f})"
-            )
-
-        context = "\n".join(lines)
-
-        if len(context) > max_chars:
-            context = context[:max_chars].rstrip() + "..."
-
-        return context
     def build_prompt_context(
         self,
         query: str,
@@ -125,112 +194,84 @@ class MemoryOS:
         turn_limit: int = 6,
         max_chars: int = 3000,
     ) -> str:
-        memory_context = self.build_context(
+        """Backward-compatible prompt context method.
+
+        ``turn_limit`` is respected for recent working memory. Retrieval is
+        handled through the manager so semantic, episodic, and working memory are
+        combined consistently.
+        """
+        query = self._validate_text(query, field_name="query")
+        results = self.manager.search(query, top_k=memory_limit, min_score=0.0)
+        recent_turns = self.working_memory.get_recent_turns(turn_limit)
+        return self.context_builder.build(
             query=query,
-            limit=memory_limit,
-            max_chars=max_chars // 2,
-            min_score=0.20,
+            results=results,
+            recent_turns=recent_turns,
+            max_chars=max_chars,
         )
 
-        working_context = self.working_memory.build_context(
-            limit=turn_limit,
-            max_chars=max_chars // 2,
-        )
+    def maybe_create_episode(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Create an episodic summary from recent stored turns when enough exist."""
+        return self.manager.maybe_create_episode(session_id=session_id)
 
-        parts = []
+    def get_all_facts(self, limit: Optional[int] = None) -> List[Fact]:
+        return self.manager.get_facts(limit=limit)
 
-        if memory_context:
-            parts.append(memory_context)
+    def get_session_facts(self, session_id: Optional[str] = None, limit: Optional[int] = None) -> List[Fact]:
+        return self.manager.get_facts(session_id=session_id or self.session_id, limit=limit)
 
-        if working_context:
-            parts.append(working_context)
+    def get_turns(self, session_id: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self.manager.get_turns(session_id=session_id or self.session_id, limit=limit)
 
-        final_context = "\n\n".join(parts)
+    def get_episodes(self, session_id: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self.manager.get_episodes(session_id=session_id or self.session_id, limit=limit)
 
-        if len(final_context) > max_chars:
-            final_context = final_context[:max_chars].rstrip() + "..."
-
-        return final_context
-        
-    def get_all_facts(
-        self,
-        limit: Optional[int] = None,
-    ) -> List[Fact]:
-        return self.store.get_all_facts(limit=limit)
-
-    def get_session_facts(
-        self,
-        session_id: Optional[str] = None,
-    ) -> List[Fact]:
-        active_session_id = session_id or self.session_id
-        return self.store.get_facts_by_session(active_session_id)
-
-    def get_turns(
-        self,
-        session_id: Optional[str] = None,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
-        active_session_id = session_id or self.session_id
-
-        return self.store.get_turns_by_session(
-            session_id=active_session_id,
-            limit=limit,
-        )
-
-    def clear_session(
-        self,
-        session_id: Optional[str] = None,
-    ) -> None:
-        active_session_id = session_id or self.session_id
-        self.store.clear_session(active_session_id)
+    def clear_session(self, session_id: Optional[str] = None) -> None:
+        self.manager.clear_session(session_id=session_id or self.session_id)
 
     def clear_all(self) -> None:
-        self.store.clear_all()
+        self.manager.clear_all()
 
-    def _filter_new_facts(
-        self,
-        extracted_facts: List[Fact],
-        existing_facts: List[Fact],
-    ) -> List[Fact]:
+    def close(self) -> None:
+        self.manager.close()
 
-        deduplicator = getattr(self.extractor, "deduplicator", None)
+    def __enter__(self) -> "MemoryOS":
+        return self
 
-        if deduplicator is not None and hasattr(deduplicator, "filter_new_facts"):
-            return deduplicator.filter_new_facts(
-                new_facts=extracted_facts,
-                existing_facts=existing_facts,
-            )
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        self.close()
 
-        if deduplicator is not None and hasattr(deduplicator, "deduplicate_facts"):
-            combined_facts = existing_facts + extracted_facts
-            unique_facts = deduplicator.deduplicate_facts(combined_facts)
+    @staticmethod
+    def _build_config(
+        *,
+        config: Optional[Union[MemoryOSConfig, Dict[str, Any]]],
+        db_path: Optional[str],
+        overrides: Dict[str, Any],
+    ) -> MemoryOSConfig:
+        if config is None:
+            config_obj = MemoryOSConfig()
+        elif isinstance(config, MemoryOSConfig):
+            config_obj = config
+        elif isinstance(config, dict):
+            config_obj = MemoryOSConfig.from_dict(config)
+        else:
+            raise ConfigError("config must be a MemoryOSConfig, dictionary, or None.")
 
-            existing_contents = {
-                self._normalize_fact_content(fact.content)
-                for fact in existing_facts
-                if getattr(fact, "content", None)
-            }
+        merged = config_obj.to_dict() if hasattr(config_obj, "to_dict") else dict(config_obj.__dict__)
+        if db_path is not None:
+            merged["db_path"] = str(Path(db_path))
+        merged.update({key: value for key, value in overrides.items() if value is not None})
+        final_config = MemoryOSConfig.from_dict(merged)
+        final_config.validate()
+        final_config.ensure_paths()
+        return final_config
 
-            return [
-                fact
-                for fact in unique_facts
-                if self._normalize_fact_content(fact.content) not in existing_contents
-            ]
+    @staticmethod
+    def _validate_text(value: Any, *, field_name: str) -> str:
+        text = str(value or "").strip()
+        if not text:
+            raise ValidationError(f"{field_name} cannot be empty.")
+        return text
 
-        existing_contents = {
-            self._normalize_fact_content(fact.content)
-            for fact in existing_facts
-            if getattr(fact, "content", None)
-        }
 
-        new_facts = []
-
-        for fact in extracted_facts:
-            content = getattr(fact, "content", "")
-            normalized_content = self._normalize_fact_content(content)
-
-            if normalized_content and normalized_content not in existing_contents:
-                new_facts.append(fact)
-                existing_contents.add(normalized_content)
-
-        return new_facts
+__all__ = ["MemoryOS"]

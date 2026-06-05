@@ -189,3 +189,15 @@ class EpisodicMemory:
             return embedding.tolist()
 
         return list(embedding)
+
+    @staticmethod
+    def _cosine_similarity(vec1: Any, vec2: Any) -> float:
+        a = np.asarray(vec1, dtype=np.float32)
+        b = np.asarray(vec2, dtype=np.float32)
+        if a.size == 0 or b.size == 0:
+            return 0.0
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return float(np.dot(a, b) / (norm_a * norm_b))

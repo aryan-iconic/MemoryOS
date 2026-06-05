@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memoryos"
+version = "0.1.0"
+description = "Persistent long-term memory layer for AI applications."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Aryan Gupta" }]
+dependencies = [
+    "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+embeddings = ["sentence-transformers>=2.2.0"]
+faiss = ["faiss-cpu>=1.7.4"]
+dev = ["pytest>=7.0", "sentence-transformers>=2.2.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"

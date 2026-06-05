@@ -1,0 +1,6 @@
+numpy>=1.23
+pytest>=7.0
+# Optional for production-quality semantic embeddings:
+# sentence-transformers>=2.2.0
+# Optional for FAISS-backed vector search:
+# faiss-cpu>=1.7.4
