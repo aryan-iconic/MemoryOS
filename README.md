@@ -1,591 +1,508 @@
+<div align="center">
+
 # MemoryOS
 
-> Persistent, local-first memory infrastructure for AI applications.
+**Persistent long-term memory for any AI application.**
 
-MemoryOS is a Python library that gives AI applications long-term memory across conversations, sessions, users, and projects. It stores recent dialogue, extracts reusable facts, summarizes past sessions, retrieves relevant memories, and builds a compact context block that can be passed to any LLM.
+[![PyPI version](https://badge.fury.io/py/memoryos.svg)](https://badge.fury.io/py/memoryos)
+[![Python](https://img.shields.io/pypi/pyversions/memoryos)](https://pypi.org/project/memoryos/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/aryan-iconic/MemoryOS?style=social)](https://github.com/aryan-iconic/MemoryOS)
 
-MemoryOS is designed to be **model-agnostic**, **local-first**, and **developer-controlled**. It does not force a specific LLM provider, vector database, or cloud service.
+MemoryOS gives any LLM or AI assistant persistent, structured memory across sessions.  
+Works with ChatGPT, Claude, Gemini, local models, or any LLM-based system.  
+No cloud required. No vendor lock-in. Fully local by default.
 
----
+[Installation](#installation) • [Quickstart](#quickstart) • [Architecture](#architecture) • [Examples](#examples) • [Configuration](#configuration) • [API Reference](#api-reference)
 
-## Why MemoryOS?
-
-Most LLM applications are stateless by default. They can respond intelligently inside one conversation, but they often forget:
-
-- who the user is,
-- what the user prefers,
-- what decisions were already made,
-- what project context matters,
-- what happened in earlier sessions.
-
-MemoryOS solves this by adding a reusable memory layer between your application and the LLM.
-
-Instead of sending full chat history every time, MemoryOS stores structured memory and retrieves only what is relevant for the current query.
+</div>
 
 ---
 
-## Core Features
+## Why MemoryOS
 
-- **Working memory** for recent conversation turns.
-- **Semantic memory** for long-term facts, preferences, goals, decisions, and context.
-- **Episodic memory** for compressed summaries of previous sessions.
-- **Fact extraction** from natural language messages.
-- **Confidence scoring** to filter low-quality facts.
-- **Deduplication** to avoid repeated memory entries.
-- **SQLite persistence** for local-first storage.
-- **Embedding-based retrieval** with deterministic fallback embeddings.
-- **Optional sentence-transformers support** for higher-quality semantic embeddings.
-- **Optional FAISS index support** for vector search experiments.
-- **Context builder** that prepares clean memory context for LLM prompts.
-- **Pluggable interfaces** for custom storage, embeddings, summarizers, and rankers.
-- **Quality gates** with ruff, mypy, pytest, build checks, and full test coverage.
+LLMs are stateless. Every conversation starts from zero — users repeat themselves, context is lost, and AI assistants feel shallow.
 
----
+MemoryOS adds a structured memory layer that:
 
-## Architecture
+- Remembers user preferences, goals, identity, and decisions across sessions
+- Retrieves only the most relevant memories for each query (not everything at once)
+- Stays fully local with SQLite and in-memory vector search out of the box
+- Works with any LLM — just inject the context string into your prompt
 
-MemoryOS uses a three-layer memory architecture.
+```python
+from memoryos import MemoryOS
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                         Your App                            │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        MemoryOS API                         │
-│              process_turn · search · build_context          │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Memory Manager                         │
-│        coordinates extraction, storage, retrieval, context   │
-└───────────────┬────────────────┬────────────────┬───────────┘
-                │                │                │
-                ▼                ▼                ▼
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│  Working Memory  │  │ Semantic Memory  │  │ Episodic Memory  │
-│  recent turns    │  │ durable facts    │  │ session summaries │
-└──────────────────┘  └──────────────────┘  └──────────────────┘
-                │                │                │
-                └────────────────┴────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Retriever + Ranker + Builder               │
-│       fetch relevant memories and build final prompt context │
-└─────────────────────────────────────────────────────────────┘
+memory = MemoryOS(session_id="user_123")
+
+# Turn 1
+memory.process_turn("My name is Aryan. I prefer dark mode UI.", "Got it!")
+
+# Turn 2 — days later, new session
+context = memory.build_context("What does this user prefer?")
+# → "Relevant user facts:\n- User's name is Aryan (type=identity)\n- User prefers dark mode UI (type=preference)"
 ```
-
----
-
-## Memory Layers
-
-### 1. Working Memory
-
-Working memory stores the most recent conversation turns. It helps the assistant maintain immediate context.
-
-Typical use:
-
-- recent user messages,
-- recent assistant replies,
-- short-term context needed in the current session.
-
-### 2. Semantic Memory
-
-Semantic memory stores durable facts extracted from conversations or manually added by the developer.
-
-Examples:
-
-- `User prefers dark UI.`
-- `User is building an AI memory system.`
-- `User decided to keep the project model-agnostic.`
-
-Semantic memory is searched using embeddings and ranked by relevance, confidence, recency, and metadata.
-
-### 3. Episodic Memory
-
-Episodic memory stores compressed summaries of previous conversation windows. It helps preserve long-term continuity without sending full chat logs to the LLM.
-
-Examples:
-
-- summary of a planning session,
-- summary of a debugging session,
-- summary of project decisions made over time.
 
 ---
 
 ## Installation
 
-### Install from source
+```bash
+pip install memoryos
+```
+
+With semantic embeddings (recommended for production):
 
 ```bash
-git clone https://github.com/<your-username>/memoryos.git
-cd memoryos
-python -m venv .venv
+pip install "memoryos[embeddings]"
 ```
 
-Activate the environment.
-
-On Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-On macOS/Linux:
+With FAISS vector index (for large memory stores):
 
 ```bash
-source .venv/bin/activate
+pip install "memoryos[embeddings,faiss]"
 ```
 
-Install MemoryOS:
-
-```bash
-pip install -e .
-```
-
-### Optional dependencies
-
-For sentence-transformers embeddings:
-
-```bash
-pip install -e ".[embeddings]"
-```
-
-For FAISS support:
-
-```bash
-pip install -e ".[faiss]"
-```
-
-For development tools:
-
-```bash
-pip install -e ".[dev]"
-```
+**Requirements:** Python 3.9+, numpy (auto-installed)
 
 ---
 
-## Quick Start
+## Quickstart
+
+### Basic usage
 
 ```python
 from memoryos import MemoryOS
 
-memory = MemoryOS(
-    db_path="memoryos.db",
-    session_id="user_1",
-)
+# Initialize — SQLite database created automatically
+memory = MemoryOS(db_path="memory.db", session_id="user_1")
 
-memory.process_turn(
-    user_message="My name is Aryan. I prefer dark UI. I am building MemoryOS.",
-    ai_response="Got it. I will remember that.",
-)
+# Process conversation turns
+memory.process_turn("My name is Aryan. I'm building an AI memory library.", "That's awesome!")
+memory.process_turn("I prefer dark mode and minimal UI.", "Noted!")
+memory.process_turn("My goal is to land a remote backend engineering role.", "Great goal!")
 
-context = memory.build_context("What should I remember about this user?")
+# Build context for your next LLM prompt
+context = memory.build_context("Tell me about this user.")
 print(context)
 
+# Search memory directly
+results = memory.search_memory("UI preferences", top_k=3)
+for result in results:
+    print(f"{result.content}  [score={result.score:.3f}]")
+
 memory.close()
 ```
 
-Example output:
-
-```text
-Relevant user facts:
-- User's name is Aryan.
-- User prefers dark UI.
-- User wants to build MemoryOS.
-
-Recent conversation:
-User: My name is Aryan. I prefer dark UI. I am building MemoryOS.
-AI: Got it. I will remember that.
-```
-
----
-
-## Manual Memory
-
-You can manually add durable memory without relying on extraction.
+### Using context in an LLM prompt
 
 ```python
 from memoryos import MemoryOS
 
-memory = MemoryOS(db_path="memoryos.db", session_id="user_1")
+memory = MemoryOS(db_path="memory.db", session_id="user_1")
 
-memory.add_memory(
-    "User wants MemoryOS to be a reusable memory layer for AI applications.",
-    fact_type="goal",
-    confidence=0.95,
-)
+def chat(user_message: str) -> str:
+    # Get relevant memory context
+    context = memory.build_context(user_message)
 
-results = memory.search_memory("What is the user's project goal?", top_k=3)
+    # Inject into your LLM system prompt
+    system_prompt = f"""You are a helpful assistant.
 
-for result in results:
-    print(result.content, result.score)
+{context}
 
-memory.close()
+Use the above memory context to personalize your response."""
+
+    # Call your LLM here (OpenAI, Anthropic, local model, etc.)
+    ai_response = your_llm_call(system_prompt, user_message)
+
+    # Save the turn so memory grows over time
+    memory.process_turn(user_message, ai_response)
+
+    return ai_response
 ```
 
 ---
 
-## Using MemoryOS With Any LLM
+## Architecture
 
-MemoryOS does not call an LLM by default. It builds the memory context and lets your application pass that context to any model.
+MemoryOS uses a three-tier memory architecture. Each layer serves a different purpose.
 
-```python
-user_message = "Can you continue from where we stopped?"
-
-memory_context = memory.build_context(user_message)
-
-prompt = f"""
-Use the following memory context when helpful.
-
-{memory_context}
-
-User message:
-{user_message}
-"""
-
-# Send `prompt` to your LLM provider of choice.
+```
+┌─────────────────────────────────────────────────────────┐
+│                        MemoryOS                         │
+│                                                         │
+│  ┌─────────────────┐  ┌──────────────┐  ┌───────────┐  │
+│  │  Working Memory │  │   Semantic   │  │  Episodic │  │
+│  │   (RAM)         │  │   Memory     │  │  Memory   │  │
+│  │                 │  │  (SQLite +   │  │  (SQLite) │  │
+│  │ Last 6–10 turns │  │   Vectors)   │  │           │  │
+│  │ Always injected │  │              │  │ Compressed│  │
+│  │ Verbatim        │  │ Long-term    │  │ episode   │  │
+│  │                 │  │ facts        │  │ summaries │  │
+│  └─────────────────┘  └──────────────┘  └───────────┘  │
+│                                                         │
+│              MemoryRetriever + MemoryRanker              │
+│         (similarity · confidence · recency · type)      │
+│                                                         │
+│                   PromptContextBuilder                   │
+│              (token-budget-aware formatting)             │
+└─────────────────────────────────────────────────────────┘
 ```
 
-This makes MemoryOS usable with OpenAI, Anthropic, Gemini, local models, custom inference servers, or your own AI application.
+### Working Memory
+- Stores the last 6–10 conversation turns verbatim
+- Always injected into context — no retrieval needed
+- Provides immediate short-term continuity
+
+### Semantic Memory
+- Extracts and stores long-term facts from conversations
+- Fact types: `identity`, `preference`, `goal`, `decision`, `context`
+- Retrieved by vector similarity to the current query
+- Deduplicated automatically — no repeated facts
+- Confidence scoring filters out low-quality extractions
+
+### Episodic Memory
+- Compressed summaries of past conversation sessions
+- Retrieved by semantic similarity
+- Reduces token usage for long conversation histories
+
+### Fact Extraction
+MemoryOS automatically detects and extracts facts from user messages:
+
+| Pattern | Example Input | Extracted Fact |
+|---------|--------------|----------------|
+| Identity | "My name is Aryan" | `User's name is Aryan` |
+| Preference | "I prefer dark mode" | `User prefers dark mode` |
+| Goal | "My goal is to learn Rust" | `User's goal is to learn Rust` |
+| Decision | "I decided to use Postgres" | `User decided to use Postgres` |
+| Context | "I am working on MemoryOS" | `User is working on MemoryOS` |
+
+---
+
+## Examples
+
+### ChatGPT integration
+
+```python
+from openai import OpenAI
+from memoryos import MemoryOS
+
+client = OpenAI()
+memory = MemoryOS(db_path="chat.db", session_id="user_1")
+
+def chat(user_message: str) -> str:
+    context = memory.build_context(user_message)
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": f"You are a helpful assistant.\n\n{context}"},
+            {"role": "user", "content": user_message},
+        ],
+    )
+
+    ai_response = response.choices[0].message.content
+    memory.process_turn(user_message, ai_response)
+    return ai_response
+
+print(chat("My name is Aryan and I prefer concise answers."))
+print(chat("What's my name?"))  # Memory recalls it
+```
+
+### Claude integration
+
+```python
+import anthropic
+from memoryos import MemoryOS
+
+client = anthropic.Anthropic()
+memory = MemoryOS(db_path="chat.db", session_id="user_1")
+
+def chat(user_message: str) -> str:
+    context = memory.build_context(user_message)
+
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        system=f"You are a helpful assistant.\n\n{context}",
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    ai_response = response.content[0].text
+    memory.process_turn(user_message, ai_response)
+    return ai_response
+```
+
+### Gemini integration
+
+```python
+import google.generativeai as genai
+from memoryos import MemoryOS
+
+genai.configure(api_key="YOUR_API_KEY")
+model = genai.GenerativeModel("gemini-1.5-flash")
+memory = MemoryOS(db_path="chat.db", session_id="user_1")
+
+def chat(user_message: str) -> str:
+    context = memory.build_context(user_message)
+    prompt = f"{context}\n\nUser: {user_message}"
+
+    response = model.generate_content(prompt)
+    ai_response = response.text
+
+    memory.process_turn(user_message, ai_response)
+    return ai_response
+```
+
+### Custom embedding provider
+
+```python
+from memoryos import MemoryOS
+from memoryos.interfaces.embedding_provider import EmbeddingProvider
+
+class MyEmbeddingProvider(EmbeddingProvider):
+    model_name = "my-custom-model"
+    dimension = 768
+
+    def embed(self, texts):
+        # Call your embedding API or local model here
+        return my_embedding_api(texts)
+
+    def similarity(self, text1: str, text2: str) -> float:
+        e1 = self.embed_one(text1)
+        e2 = self.embed_one(text2)
+        return cosine_similarity(e1, e2)
+
+memory = MemoryOS(db_path="chat.db", session_id="user_1")
+# Inject custom embedding at the semantic memory level
+from memoryos.memory.semantic import SemanticMemory
+# See advanced docs for full custom injection
+```
+
+### Adding memory manually
+
+```python
+from memoryos import MemoryOS
+
+memory = MemoryOS(db_path="chat.db", session_id="user_1")
+
+# Manually add a fact without extraction
+memory.add_memory("User is a backend engineer at Tata Motors", fact_type="context", confidence=0.99)
+memory.add_memory("User's preferred language is Python", fact_type="preference", confidence=0.95)
+
+# Retrieve it
+context = memory.build_context("What tech does this user use?")
+print(context)
+```
+
+### Context manager
+
+```python
+from memoryos import MemoryOS
+
+with MemoryOS(db_path="chat.db", session_id="user_1") as memory:
+    memory.process_turn("I'm working on a RAG pipeline.", "Nice!")
+    context = memory.build_context("What is the user building?")
+    print(context)
+# Connection closed automatically
+```
 
 ---
 
 ## Configuration
 
+All settings can be passed to `MemoryOSConfig` or as keyword arguments.
+
 ```python
-from memoryos import MemoryOS
-from memoryos.config import MemoryOSConfig
+from memoryos import MemoryOS, MemoryOSConfig
 
 config = MemoryOSConfig(
-    db_path="data/memoryos.db",
-    working_memory_size=8,
-    semantic_top_k=5,
-    episodic_top_k=3,
-    min_fact_confidence=0.65,
-    duplicate_similarity_threshold=0.90,
+    db_path="my_memory.db",           # SQLite database path
+    working_memory_size=10,           # Turns to keep in working memory
+    semantic_top_k=5,                 # Top facts to retrieve per query
+    episodic_top_k=3,                 # Top episode summaries to retrieve
+    min_fact_confidence=0.65,         # Minimum confidence to store a fact
+    duplicate_similarity_threshold=0.90,  # Threshold to skip duplicate facts
     embedding_model_name="sentence-transformers/all-MiniLM-L6-v2",
     embedding_dim=384,
-    auto_create_episodes=False,
+    max_context_tokens=6000,          # Max characters in context output
+    auto_create_episodes=False,       # Auto-create episode summaries
 )
 
 memory = MemoryOS(config=config, session_id="user_1")
 ```
 
-### Environment variables
-
-MemoryOS can also read configuration from environment variables.
+### Environment variable configuration
 
 ```bash
-MEMORYOS_DB_PATH=./data/memoryos.db
-MEMORYOS_EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-MEMORYOS_WORKING_MEMORY_SIZE=8
-MEMORYOS_SEMANTIC_TOP_K=5
-MEMORYOS_EPISODIC_TOP_K=3
-MEMORYOS_MIN_FACT_CONFIDENCE=0.65
-MEMORYOS_ENABLE_FAISS=false
+export MEMORYOS_DB_PATH=./data/memory.db
+export MEMORYOS_WORKING_MEMORY_SIZE=12
+export MEMORYOS_MIN_FACT_CONFIDENCE=0.70
+export MEMORYOS_ENABLE_FAISS=true
 ```
 
 ```python
-from memoryos import MemoryOS
-
 memory = MemoryOS.from_env(session_id="user_1")
 ```
 
----
+### Configuration reference
 
-## Public API
-
-| Method | Purpose |
-|---|---|
-| `process_turn(user_message, ai_response="")` | Save a conversation turn and extract durable facts. |
-| `add_memory(content, fact_type="context")` | Manually add a long-term fact. |
-| `search_memory(query, top_k=5)` | Search working, semantic, and episodic memory. |
-| `search(query, top_k=5)` | Alias for `search_memory`. |
-| `build_context(query)` | Build final memory context for an LLM prompt. |
-| `build_prompt_context(query)` | Backward-compatible context builder. |
-| `maybe_create_episode()` | Create an episodic summary from recent turns when enough exist. |
-| `get_all_facts()` | Return stored facts. |
-| `get_session_facts(session_id)` | Return facts for a session. |
-| `get_turns(session_id)` | Return stored conversation turns. |
-| `get_episodes(session_id)` | Return episodic summaries. |
-| `clear_session(session_id)` | Delete memory for one session. |
-| `clear_all()` | Delete all stored memory. |
-| `close()` | Close storage resources. |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `db_path` | `memoryos.db` | SQLite database file path |
+| `working_memory_size` | `8` | Number of recent turns to keep |
+| `semantic_top_k` | `5` | Top semantic facts retrieved per query |
+| `episodic_top_k` | `3` | Top episode summaries retrieved per query |
+| `min_fact_confidence` | `0.65` | Minimum confidence score to store a fact |
+| `duplicate_similarity_threshold` | `0.90` | Cosine threshold for deduplication |
+| `embedding_model_name` | `all-MiniLM-L6-v2` | Sentence transformer model |
+| `embedding_dim` | `384` | Embedding vector dimensions |
+| `max_context_tokens` | `6000` | Max characters in built context |
+| `enable_faiss` | `False` | Use FAISS for vector index |
+| `auto_create_episodes` | `False` | Auto-create episode summaries |
+| `min_episode_turns` | `4` | Minimum turns before creating an episode |
 
 ---
 
-## Fact Model
+## API Reference
 
-MemoryOS stores durable memory as structured facts.
+### `MemoryOS`
+
+#### Initialization
 
 ```python
-{
-    "id": "uuid",
-    "content": "User prefers dark UI.",
-    "type": "preference",
-    "confidence": 0.95,
-    "session_id": "user_1",
-    "source": "conversation",
-    "timestamp": 1714639200.0,
-    "access_count": 0,
-    "embedding": [0.01, 0.02, ...],
-    "metadata": {},
-}
+MemoryOS(
+    db_path: str = None,
+    session_id: str = "default_session",
+    config: MemoryOSConfig = None,
+)
 ```
 
-Supported fact types:
+#### Core methods
 
-- `identity`
-- `preference`
-- `goal`
-- `decision`
-- `context`
+| Method | Description |
+|--------|-------------|
+| `process_turn(user_message, ai_response)` | Save a turn and extract facts |
+| `build_context(query)` | Build context string for LLM prompt |
+| `search_memory(query, top_k, min_score)` | Search all memory layers |
+| `add_memory(content, fact_type, confidence)` | Manually add a fact |
 
-Supported fact sources:
+#### Data access
 
-- `conversation`
-- `manual`
-- `system`
+| Method | Description |
+|--------|-------------|
+| `get_all_facts(limit)` | Return all stored facts |
+| `get_session_facts(session_id, limit)` | Return facts for a session |
+| `get_turns(session_id, limit)` | Return stored conversation turns |
+| `get_episodes(session_id, limit)` | Return episode summaries |
 
----
+#### Session management
 
-## Extraction Philosophy
+| Method | Description |
+|--------|-------------|
+| `clear_session(session_id)` | Clear all data for a session |
+| `clear_all()` | Clear all data in the database |
+| `close()` | Close database connection |
+| `maybe_create_episode(session_id)` | Manually trigger episode creation |
 
-MemoryOS is intentionally conservative.
+### `Fact` object
 
-It should not store every sentence. It should store reusable information that is likely to matter later.
-
-Examples of useful memory:
-
-- user preferences,
-- stable identity details,
-- long-term goals,
-- project decisions,
-- important context.
-
-Examples of memory to avoid:
-
-- temporary small talk,
-- one-off questions,
-- unsupported assumptions,
-- noisy or low-confidence facts.
-
-Core principle:
-
-> Extract less, but extract meaningful information.
-
----
-
-## Retrieval Flow
-
-When you call `build_context(query)`, MemoryOS performs the following steps:
-
-```text
-query
-  → retrieve recent working memory
-  → search semantic facts
-  → search episodic summaries
-  → rank by relevance, confidence, recency, and source
-  → deduplicate results
-  → build compact prompt context
+```python
+@dataclass
+class Fact:
+    content: str          # "User's name is Aryan"
+    type: str             # identity | preference | goal | decision | context
+    confidence: float     # 0.0 – 1.0
+    session_id: str
+    id: str               # UUID
+    source: str           # conversation | manual | system
+    timestamp: float      # Unix timestamp
+    access_count: int
+    embedding: List[float]
+    metadata: Dict
 ```
 
-The final output is a clean text block that can be inserted into an LLM prompt.
+### `MemorySearchResult` object
 
----
-
-## Project Structure
-
-```text
-memoryos/
-├── compression/        # summarization, compression, token budgeting
-├── embeddings/         # embedding providers and deterministic fallback
-├── extraction/         # fact extraction, confidence scoring, deduplication
-├── interfaces/         # pluggable backend/provider contracts
-├── memory/             # working, semantic, episodic memory and manager
-├── retrieval/          # retriever, ranker, scorer, context builder
-├── storage/            # SQLite storage, vector index, FAISS support, migrations
-├── utils/              # utility helpers
-├── config.py           # runtime configuration
-├── core.py             # public MemoryOS API
-├── exceptions.py       # custom exceptions
-└── models.py           # core dataclasses
+```python
+@dataclass
+class MemorySearchResult:
+    content: str          # Memory content
+    source: str           # working | semantic | episodic
+    score: float          # Ranked relevance score 0.0 – 1.0
+    type: str             # Fact type if semantic
+    confidence: float     # Original extraction confidence
+    timestamp: float
+    metadata: Dict
 ```
 
 ---
 
-## Development
+## Ranking System
 
-Install development dependencies:
+MemoryOS ranks retrieved memories using four signals:
 
-```bash
-pip install -e ".[dev]"
-```
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Similarity | 70% | Cosine similarity to query embedding |
+| Confidence | 15% | Extraction confidence score |
+| Recency | 10% | Exponential decay (30-day half-life by default) |
+| Source | 5% | semantic > episodic > working |
 
-Run tests:
-
-```bash
-python -m pytest -q
-```
-
-Run coverage:
-
-```bash
-python -m pytest --cov=memoryos --cov-report=term-missing
-```
-
-Run linting:
-
-```bash
-python -m ruff check memoryos tests
-```
-
-Run type checking:
-
-```bash
-python -m mypy memoryos
-```
-
-Build package:
-
-```bash
-python -m build
-```
-
-Full quality gate:
-
-```bash
-python -m ruff check memoryos tests
-python -m mypy memoryos
-python -m pytest -q
-python -m pytest --cov=memoryos --cov-report=term-missing
-python -m build
-python -c "from memoryos import MemoryOS; print('ok')"
-```
-
-Current local quality status for v0.1.0:
-
-```text
-ruff: passed
-mypy: passed
-pytest: passed
-coverage: 100%
-build: passed
-import check: passed
-```
+Fact types also apply multipliers: `identity` (1.05×) → `decision` (1.03×) → `goal` (1.02×) → `preference` (1.01×) → `context` (1.00×).
 
 ---
 
-## Debug Demo
+## Design Philosophy
 
-Run the included debug script:
-
-```bash
-python debug.py
-```
-
-The script demonstrates:
-
-- processing turns,
-- extracting facts,
-- saving memory,
-- creating an episode,
-- searching memory,
-- building context.
-
----
-
-## Design Principles
-
-- **Local-first**: Memory should work without mandatory cloud infrastructure.
-- **Model-agnostic**: MemoryOS should work with any LLM or chatbot.
-- **Storage-flexible**: SQLite by default, but designed for future backends.
-- **Context-efficient**: Retrieve only the memory needed for the current task.
-- **Transparent**: Developers should be able to inspect, debug, and control memory.
-- **Pluggable**: Embeddings, summarizers, rankers, and storage can evolve independently.
-
----
-
-## Limitations
-
-MemoryOS is currently an early `v0.1.0` library. The core system is functional, tested, and installable, but some production extensions are still future work.
-
-Current limitations:
-
-- SQLite is the default storage backend.
-- Built-in extraction is rule/heuristic based.
-- Advanced LLM-based extraction is not bundled by default.
-- FAISS is optional and experimental.
-- Distributed/team memory, auth, encryption, and hosted APIs are not included yet.
-- Quality of semantic retrieval depends on the embedding provider used.
+- **Local-first** — no required cloud services, no hidden API calls
+- **Model-agnostic** — works with any LLM, any embedding model
+- **No forced dependencies** — sentence-transformers and FAISS are optional
+- **Transparent** — confidence scores, source labels, and ranked scores are always visible
+- **Extensible** — replace any component: storage, embeddings, ranking, summarization
+- **Opinionated defaults** — works out of the box, customizable for production
 
 ---
 
 ## Roadmap
 
-Planned improvements:
-
-- Postgres and pgvector backend.
-- Import/export and backup tools.
-- More advanced fact extraction.
-- LLM-powered optional summarization and extraction adapters.
-- Stronger benchmarking suite.
-- More integration examples.
-- Hosted API wrapper.
-- Better documentation site.
-- CI/CD workflow for GitHub Actions.
-
----
-
-## Example Use Cases
-
-MemoryOS can be used in:
-
-- AI assistants,
-- AI coding copilots,
-- legal AI workspaces,
-- customer support agents,
-- personal productivity assistants,
-- research assistants,
-- education tutors,
-- local-first AI tools,
-- multi-session chatbot systems.
+- [x] Three-tier memory architecture (working, semantic, episodic)
+- [x] Fact extraction with confidence scoring and deduplication
+- [x] SQLite storage backend
+- [x] In-memory and FAISS vector index
+- [x] Token-budget-aware context builder
+- [x] Recency-weighted ranking
+- [x] `from_env()` configuration
+- [ ] PostgreSQL + pgvector storage backend
+- [ ] Async API (`aprocess_turn`, `abuild_context`)
+- [ ] OpenAI-compatible embedding provider
+- [ ] Memory export / import (JSON)
+- [ ] REST API server mode
+- [ ] LangChain and LlamaIndex integrations
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Good first areas include:
-
-- improving extraction patterns,
-- adding more tests,
-- building integrations,
-- improving documentation,
-- adding new storage backends,
-- improving retrieval and ranking.
-
-Before opening a pull request, run:
+Contributions are welcome. Please open an issue before submitting a large PR.
 
 ```bash
-python -m ruff check memoryos tests
-python -m mypy memoryos
-python -m pytest --cov=memoryos --cov-report=term-missing
+git clone https://github.com/aryan-iconic/MemoryOS
+cd MemoryOS
+pip install -e ".[dev]"
+pytest
 ```
 
 ---
 
 ## License
 
-Add your chosen license here, for example MIT, Apache-2.0, or another license depending on your release plan.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## Summary
+<div align="center">
 
-MemoryOS is a persistent memory layer for AI applications.
+Built by [Aryan Gupta](https://github.com/aryan-iconic) · [GitHub](https://github.com/aryan-iconic/MemoryOS) · [PyPI](https://pypi.org/project/memoryos/)
 
-It combines working memory, semantic memory, and episodic memory into one local-first Python package. It helps AI systems remember useful context across sessions while keeping memory retrieval compact, transparent, and developer-controlled.
+</div>
